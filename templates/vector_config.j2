@@ -1,0 +1,22 @@
+---
+data_dir: /var/lib/vector
+sources:
+  test_logs:
+    type: demo_logs
+    format: json
+
+transforms:
+  test_transform:
+    type: dedupe
+    inputs:
+      - test_logs
+
+sinks:
+  test_sink:
+    type: clickhouse
+    inputs:
+      - test_transform
+    database: logs
+    endpoint: http://localhost:8123
+    table: test_table
+...

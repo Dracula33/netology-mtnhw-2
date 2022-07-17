@@ -1,0 +1,20 @@
+[Unit]
+Description=Vector Service
+Documentation=https://vector.dev
+
+[Service]
+Type=simple
+
+User=root
+Group=root
+PIDFile=/var/run/vector.pid
+WorkingDirectory=/etc/vector-x86_64-unknown-linux-musl
+
+ExecStart=/usr/bin/vector --config /etc/vector-x86_64-unknown-linux-musl/config/config.yaml
+
+Restart=on-failure
+RestartSec=30
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

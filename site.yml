@@ -2,23 +2,31 @@
 - name: Install Clickhouse
   hosts: clickhouse
   handlers:
+
     - name: Start clickhouse service
       become: true
       ansible.builtin.service:
         name: clickhouse-server
         state: restarted
+        daemon_reload: true
+
   tasks:
-    - block:
+
+    - name: Get clickhouse distrib
+      block:
         - name: Get clickhouse distrib
           ansible.builtin.get_url:
             url: "https://packages.clickhouse.com/rpm/stable/{{ item }}-{{ clickhouse_version }}.noarch.rpm"
             dest: "./{{ item }}-{{ clickhouse_version }}.rpm"
+            mode: 0644
           with_items: "{{ clickhouse_packages }}"
       rescue:
         - name: Get clickhouse distrib
           ansible.builtin.get_url:
             url: "https://packages.clickhouse.com/rpm/stable/clickhouse-common-static-{{ clickhouse_version }}.x86_64.rpm"
             dest: "./clickhouse-common-static-{{ clickhouse_version }}.rpm"
+            mode: 0644
+
     - name: Install clickhouse packages
       become: true
       ansible.builtin.yum:
@@ -27,8 +35,68 @@
           - clickhouse-client-{{ clickhouse_version }}.rpm
           - clickhouse-server-{{ clickhouse_version }}.rpm
       notify: Start clickhouse service
+
+    - name: Start clickhouse
+      ansible.builtin.meta: flush_handlers
+
     - name: Create database
       ansible.builtin.command: "clickhouse-client -q 'create database logs;'"
       register: create_db
       failed_when: create_db.rc != 0 and create_db.rc !=82
       changed_when: create_db.rc == 0
+
+- name: Install vector
+  hosts: clickhouse
+  handlers:
+
+    - name: Start vector service
+      become: true
+      ansible.builtin.service:
+        name: vector
+        state: restarted
+        daemon_reload: true
+
+  tasks:
+
+    - name: Get vector distrib
+      ansible.builtin.get_url:
+        url: "https://packages.timber.io/vector/{{ vector_version }}/vector-{{ vector_version }}-x86_64-unknown-linux-musl.tar.gz"
+        dest: "./"
+        mode: 0644
+
+    - name: Unarchive vector distrib
+      ansible.builtin.unarchive:
+        src: vector-{{ vector_version }}-x86_64-unknown-linux-musl.tar.gz
+        dest: .
+        remote_src: true
+
+    - name: Copy vector to /etc
+      become: true
+      ansible.builtin.copy:
+        src: vector-x86_64-unknown-linux-musl
+        dest: /etc/
+        remote_src: true
+        mode: 0644
+
+    - name: Create symlink for vector
+      become: true
+      ansible.builtin.file:
+        src: "/etc/vector-x86_64-unknown-linux-musl/bin/vector"
+        path: "/usr/bin/vector"
+        state: link
+
+    - name: Create vector config
+      become: true
+      ansible.builtin.template:
+        src: vector_config.j2
+        dest: "/etc/vector-x86_64-unknown-linux-musl/config/config.yaml"
+        mode: 0644
+
+    - name: Create systemd config
+      become: true
+      ansible.builtin.template:
+        src: vector.service.j2
+        dest: "/etc/systemd/system/vector.service"
+        mode: 0644
+      notify: Start vector service
+...
