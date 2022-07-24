@@ -1,4 +1,4 @@
-
+variable instance_name { default = "" }
 variable family { default = "centos-7" }
 variable subnet_id { default = "" }
 
@@ -16,10 +16,10 @@ data "yandex_compute_image" "default" {
 
 resource "yandex_compute_instance" "instance" {
 
-  name                      = "test-instance"
+  name                      = "${var.instance_name}"
   description               = "Дешевая и слабая нода"
   zone                      = "ru-central1-a"
-  hostname                  = "test-instance"
+  hostname                  = "${var.instance_name}"
   allow_stopping_for_update = true
 
   platform_id = "standard-v3"

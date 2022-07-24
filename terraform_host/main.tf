@@ -22,12 +22,35 @@ resource "yandex_vpc_subnet" "default" {
 }
 
 
-module "test-node" {
+module "clickhouse" {
   source = "./modules/cheep-instance"
+  instance_name = "clickhouse"
   family = "centos-7"
   subnet_id = "${yandex_vpc_subnet.default.id}"
 }
 
-output "external_ip_address_test-node" {
-  value = "${module.test-node.external-ip}"
+module "vector" {
+  source = "./modules/cheep-instance"
+  instance_name = "vector"
+  family = "centos-7"
+  subnet_id = "${yandex_vpc_subnet.default.id}"
+}
+
+module "lighthouse" {
+  source = "./modules/cheep-instance"
+  instance_name = "lighthouse"
+  family = "centos-7"
+  subnet_id = "${yandex_vpc_subnet.default.id}"
+}
+
+output "external_ip_address_clickhouse" {
+  value = "${module.clickhouse.external-ip}"
+}
+
+output "external_ip_address_vector" {
+  value = "${module.vector.external-ip}"
+}
+
+output "external_ip_address_lighthouse" {
+  value = "${module.lighthouse.external-ip}"
 }

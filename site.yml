@@ -1,6 +1,25 @@
 ---
+- name: Add hosts to /etc/hosts
+  tags: always
+  hosts:
+    - clickhouse
+    - vector
+    - lighthouse
+  tasks:
+
+    - name: Add hosts
+      become: true
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        block: |
+          {{ hostvars['clickhouse-01']['ansible_host'] }} clickhouse
+          {{ hostvars['vector-01']['ansible_host'] }} vector
+          {{ hostvars['lighthouse-01']['ansible_host'] }} lighthouse
+        marker: "# {mark} ANSIBLE ADD HOSTS"
+
 - name: Install Clickhouse
   hosts: clickhouse
+  tags: clickhouse
   handlers:
 
     - name: Start clickhouse service
@@ -36,6 +55,13 @@
           - clickhouse-server-{{ clickhouse_version }}.rpm
       notify: Start clickhouse service
 
+    - name: Copy clickhouse config
+      become: true
+      ansible.builtin.template:
+        src: clickhouse_config.xml.j2
+        dest: "/etc/clickhouse-server/config.xml"
+        mode: 0644
+
     - name: Start clickhouse
       ansible.builtin.meta: flush_handlers
 
@@ -45,8 +71,15 @@
       failed_when: create_db.rc != 0 and create_db.rc !=82
       changed_when: create_db.rc == 0
 
+    - name: Create table
+      ansible.builtin.command: "clickhouse-client -q 'create table logs.test_table(message String, source_type String, timestamp String) engine Log();'"
+      register: create_db
+      failed_when: create_db.rc != 0 and create_db.rc !=57
+      changed_when: create_db.rc == 0
+
 - name: Install vector
-  hosts: clickhouse
+  hosts: vector
+  tags: vector
   handlers:
 
     - name: Start vector service
@@ -99,4 +132,48 @@
         dest: "/etc/systemd/system/vector.service"
         mode: 0644
       notify: Start vector service
+
+- name: Install lighthouse
+  hosts: lighthouse
+  tags: lighthouse
+  handlers:
+
+    - name: Start nginx
+      become: true
+      ansible.builtin.service:
+        name: nginx
+        state: restarted
+        daemon_reload: true
+
+  tasks:
+
+    - name: Install git package
+      become: true
+      ansible.builtin.yum:
+        name: git
+
+    - name: Clone lighthouse repo
+      become: true
+      ansible.builtin.git:
+        repo: "https://github.com/VKCOM/lighthouse.git"
+        dest: "/etc/lighthouse"
+        version: master
+
+    - name: Install nginx
+      become: true
+      ansible.builtin.yum:
+        name: "{{ item }}"
+      with_items:
+        - epel-release
+        - nginx
+      notify: Start nginx
+
+    - name: Create nginx config
+      become: true
+      ansible.builtin.template:
+        src: nginx.conf.j2
+        dest: "/etc/nginx/conf.d/lighthouse.conf"
+        mode: 0644
+      notify: Start nginx
+
 ...

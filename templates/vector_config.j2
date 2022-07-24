@@ -12,11 +12,20 @@ transforms:
       - test_logs
 
 sinks:
+  debug_sink:
+    type: console
+    inputs:
+      - test_transform
+    target: stdout
+    encoding:
+      codec: json
+
   test_sink:
     type: clickhouse
     inputs:
       - test_transform
     database: logs
-    endpoint: http://localhost:8123
+    endpoint: http://clickhouse:8123
     table: test_table
+    skip_unknown_fields: true
 ...
