@@ -5,7 +5,7 @@ server {
 #lighthouse
 #
     location /lighthouse {
-	root /etc;
+	root {{ lighthouse_install_directory }};
 #	index index.html;
     }
 }

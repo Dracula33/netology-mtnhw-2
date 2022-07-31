@@ -20,51 +20,15 @@
 - name: Install Clickhouse
   hosts: clickhouse
   tags: clickhouse
-  handlers:
+  vars:
+    clickhouse_listen_host:
+      - "::"
+    clickhouse_networks_default:
+      - "::/0"
+  roles:
+    - clickhouse
 
-    - name: Start clickhouse service
-      become: true
-      ansible.builtin.service:
-        name: clickhouse-server
-        state: restarted
-        daemon_reload: true
-
-  tasks:
-
-    - name: Get clickhouse distrib
-      block:
-        - name: Get clickhouse distrib
-          ansible.builtin.get_url:
-            url: "https://packages.clickhouse.com/rpm/stable/{{ item }}-{{ clickhouse_version }}.noarch.rpm"
-            dest: "./{{ item }}-{{ clickhouse_version }}.rpm"
-            mode: 0644
-          with_items: "{{ clickhouse_packages }}"
-      rescue:
-        - name: Get clickhouse distrib
-          ansible.builtin.get_url:
-            url: "https://packages.clickhouse.com/rpm/stable/clickhouse-common-static-{{ clickhouse_version }}.x86_64.rpm"
-            dest: "./clickhouse-common-static-{{ clickhouse_version }}.rpm"
-            mode: 0644
-
-    - name: Install clickhouse packages
-      become: true
-      ansible.builtin.yum:
-        name:
-          - clickhouse-common-static-{{ clickhouse_version }}.rpm
-          - clickhouse-client-{{ clickhouse_version }}.rpm
-          - clickhouse-server-{{ clickhouse_version }}.rpm
-      notify: Start clickhouse service
-
-    - name: Copy clickhouse config
-      become: true
-      ansible.builtin.template:
-        src: clickhouse_config.xml.j2
-        dest: "/etc/clickhouse-server/config.xml"
-        mode: 0644
-
-    - name: Start clickhouse
-      ansible.builtin.meta: flush_handlers
-
+  post_tasks:
     - name: Create database
       ansible.builtin.command: "clickhouse-client -q 'create database logs;'"
       register: create_db
@@ -80,62 +44,43 @@
 - name: Install vector
   hosts: vector
   tags: vector
-  handlers:
-
-    - name: Start vector service
-      become: true
-      ansible.builtin.service:
-        name: vector
-        state: restarted
-        daemon_reload: true
-
-  tasks:
-
-    - name: Get vector distrib
-      ansible.builtin.get_url:
-        url: "https://packages.timber.io/vector/{{ vector_version }}/vector-{{ vector_version }}-x86_64-unknown-linux-musl.tar.gz"
-        dest: "./"
-        mode: 0644
-
-    - name: Unarchive vector distrib
-      ansible.builtin.unarchive:
-        src: vector-{{ vector_version }}-x86_64-unknown-linux-musl.tar.gz
-        dest: .
-        remote_src: true
-
-    - name: Copy vector to /etc
-      become: true
-      ansible.builtin.copy:
-        src: vector-x86_64-unknown-linux-musl
-        dest: /etc/
-        remote_src: true
-        mode: 0644
-
-    - name: Create symlink for vector
-      become: true
-      ansible.builtin.file:
-        src: "/etc/vector-x86_64-unknown-linux-musl/bin/vector"
-        path: "/usr/bin/vector"
-        state: link
-
-    - name: Create vector config
-      become: true
-      ansible.builtin.template:
-        src: vector_config.j2
-        dest: "/etc/vector-x86_64-unknown-linux-musl/config/config.yaml"
-        mode: 0644
-
-    - name: Create systemd config
-      become: true
-      ansible.builtin.template:
-        src: vector.service.j2
-        dest: "/etc/systemd/system/vector.service"
-        mode: 0644
-      notify: Start vector service
+  vars:
+    vector_install_dir: /etc
+    data_dir: /home/test
+    config:
+      sources:
+        test_logs:
+          type: demo_logs
+          format: json
+      transforms:
+        test_transform:
+          type: dedupe
+          inputs:
+            - test_logs
+      sinks:
+        debug_sink:
+          type: console
+          inputs:
+            - test_transform
+          target: stdout
+          encoding:
+            codec: json
+        test_sink:
+          type: clickhouse
+          inputs:
+            - test_transform
+          database: logs
+          endpoint: http://clickhouse:8123
+          table: test_table
+          skip_unknown_fields: true
+  roles:
+    - vector
 
 - name: Install lighthouse
   hosts: lighthouse
   tags: lighthouse
+  vars:
+    lighthouse_install_directory: /etc
   handlers:
 
     - name: Start nginx
@@ -145,19 +90,7 @@
         state: restarted
         daemon_reload: true
 
-  tasks:
-
-    - name: Install git package
-      become: true
-      ansible.builtin.yum:
-        name: git
-
-    - name: Clone lighthouse repo
-      become: true
-      ansible.builtin.git:
-        repo: "https://github.com/VKCOM/lighthouse.git"
-        dest: "/etc/lighthouse"
-        version: master
+  pre_tasks:
 
     - name: Install nginx
       become: true
@@ -176,4 +109,6 @@
         mode: 0644
       notify: Start nginx
 
+  roles:
+    - lighthouse
 ...

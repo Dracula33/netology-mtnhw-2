@@ -11,6 +11,7 @@ create_virt:
 	echo "Still creating" && sleep 30
 
 run_ansible:
+	ansible-galaxy install -r ./requirements.yml -p ./roles -f
 	ansible-playbook -i inventory/prod.yml site.yml
 
 first_run: create_virt run_ansible
